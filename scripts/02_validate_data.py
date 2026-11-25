@@ -2,7 +2,7 @@ from pathlib import Path
 import pandas as pd
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
-EVENTS_PATH = PROJECT_DIR / "dataset" / "events.csv"
+EVENTS_PATH = PROJECT_DIR / "data" / "raw" / "events.csv"
 
 REQUIRED_COLUMNS = [
     "timestamp",

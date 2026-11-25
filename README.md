@@ -12,12 +12,12 @@ The main objective is to identify patterns in user behavior, evaluate purchasing
 
 ### Main business question:
 
-At which stage of the user journey does the largest decrease in visitor counts occur, and which user segments are more likely to return?
+At which stage of the user journey does the largest visitor drop-off occur, and which user segments are more likely to return?
 
 ### Supporting questions:
 
-- What are the key visitor metrics and funnel ratios?
-- Between which funnel stages is the largest relative decrease in visitor counts observed?
+- What are the key visitor metrics and conversion rates?
+- At which funnel stage is the highest drop-off observed?
 - How does weekly user retention change over time?
 - How does first-session behavior relate to subsequent user retention?
 
@@ -33,6 +33,12 @@ The analysis focuses on three types of events:
 
 Raw data is excluded from the repository.
 
+## Documentation
+
+Detailed metric definitions, sessionization rules, funnel logic,
+retention calculations, and methodological assumptions are available
+in [Metric Definitions](docs/metric_definitions.md).
+
 ## Tools & Technologies
 
 - Python — data acquisition and validation.
@@ -43,13 +49,17 @@ Raw data is excluded from the repository.
 
 ### 1. Funnel Analysis
 
-Calculated unique visitor counts for product views, cart additions, and transactions.
+A visitor-level sequential funnel was constructed to analyze progression through three stages: product view, add to cart, and transaction.
 
-The following ratios were calculated:
+Funnel stages must occur in chronological order within the same session. Sessions are defined using a 30-minute inactivity threshold.
 
-- View-to-Cart Ratio
-- Cart-to-Purchase Ratio
-- View-to-Purchase Ratio
+Each visitor is counted once per funnel stage across the observation period.
+
+The following conversion rates were calculated:
+
+- View-to-Cart Conversion Rate
+- Cart-to-Purchase Conversion Rate
+- View-to-Purchase Conversion Rate
 
 ### 2. User Segmentation
 
@@ -88,14 +98,14 @@ An interactive Tableau dashboard was developed to present:
 | View Visitors | 1,404,179 |
 | Cart Visitors | 31,487 |
 | Transaction Visitors | 8,596 |
-| View-to-Cart Ratio | 2.24% |
-| Cart-to-Purchase Ratio | 27.30% |
-| View-to-Purchase Ratio | 0.61% |
+| View-to-Cart Conversion Rate | 2.24% |
+| Cart-to-Purchase Conversion Rate | 27.30% |
+| View-to-Purchase Conversion Rate | 0.61% |
 
 ## Key Insights
 
-- The largest relative decrease in visitor counts occurs between product views and cart additions, with a view-to-cart ratio of 2.24%.
-- Transaction visitors represent less than 1% of product view visitors.
+- The largest visitor drop-off occurs between product views and cart additions, with a drop-off rate of 97.76%.
+- Only 0.61% of product view visitors complete the sequential purchase funnel.
 - Weekly retention declines substantially after the first week across all first-session segments.
 - Users who purchase during their first session demonstrate the highest early-week retention.
 - Users who add products to their cart without completing a purchase also show higher early-week retention than users who only view products.
@@ -129,6 +139,10 @@ The interactive Tableau dashboard provides an overview of key product metrics, w
 
 ## Analysis Limitations
 
-- Funnel ratios are based on unique visitor counts at each stage and should not be interpreted as strictly sequential conversion rates without additional event-sequence validation.
+- Funnel stages must occur sequentially within the same session, but matching product IDs across stages is not required.
+- Cross-session conversion paths are not captured by the funnel.
+- Sessions are inferred using a 30-minute inactivity threshold rather than explicit session identifiers.
+- The first observed session does not necessarily represent a user's first-ever interaction with the platform.
 - Retention comparisons are observational and do not establish causality.
-- Later retention periods may include fewer eligible cohorts due to the limited observation window.
+- Later retention periods include fewer eligible cohorts due to the limited observation window.
+- The first calendar week of the dataset may represent an incomplete observation period.

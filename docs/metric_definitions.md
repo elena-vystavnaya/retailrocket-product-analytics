@@ -1,65 +1,81 @@
 # Metric Definitions
 
-## Project question
+## Project Question
 
-At which step of the user journey do visitors drop off, and which user groups are more likely to return?
+At which stage of the user journey does the largest visitor drop-off occur, and which user segments are more likely to return?
 
-## Scope and data limitations
+## Scope and Data Limitations
 
-The RetailRocket dataset contains behavioral events, but it does not include registration events, acquisition channels, or device information. Therefore, this analysis does not measure registration conversion. A visitor's first observed event is used as the start of observation; it must not be described as the visitor's registration date or necessarily their first-ever visit.
+The RetailRocket dataset contains observed e-commerce events from 2015: `view`, `addtocart`, and `transaction`. It does not include registration events, acquisition channels, or device information. The first observed event is not necessarily a visitor's first-ever visit or registration date.
 
-Event timestamps are stored as Unix milliseconds and will be interpreted in UTC. The available event types are `view`, `addtocart`, and `transaction`.
+Timestamps are converted from Unix milliseconds and interpreted in UTC. Exact duplicate source rows are removed before sessionization. Repeated transaction IDs alone are not treated as duplicates.
 
-## Entity definitions
+## Entity Definitions
 
-- **Visitor:** a unique `visitorid`.
-- **Event:** one row in `events.csv`, identified by its visitor, timestamp, event type, item, and (where present) transaction ID. The source has no dedicated event ID, so duplicate handling will be validated before any records are removed.
-- **Session:** a sequence of events for one visitor. A new session starts when the gap from the previous event is greater than 30 minutes. This is an analytical assumption because the source does not provide session IDs.
-- **First observed event:** the earliest event for a visitor in the dataset's observation period. Visitors may have been active before the dataset begins, so this does not establish when they became new users.
+- **Visitor:** a distinct `visitorid`.
+- **Event:** a recorded interaction identified by visitor, timestamp, event type, item, and transaction ID (where present). The source does not provide a dedicated event ID.
+- **Session:** a sequence of events for one visitor. A new session starts at the first observed event or when the gap from the previous event exceeds 30 minutes.
+- **First observed event:** the earliest recorded event for a visitor within the dataset's observation window.
 
-## Funnel
+## Visitor Conversion Funnel
 
-The funnel is measured using unique visitors and requires the ordered steps to occur within the same inferred session:
+The funnel measures unique visitors reaching ordered stages within the same inferred session:
 
-1. `view` — the visitor views an item.
-2. `addtocart` — the visitor adds an item to the cart after a view.
-3. `transaction` — the visitor completes a transaction after adding an item to the cart.
+1. **View:** at least one product view.
+2. **Add to Cart:** an `addtocart` event strictly after a view in the same session.
+3. **Transaction:** a `transaction` event strictly after a qualifying cart event in the same session.
 
-A visitor is counted at most once at each step. To count at a later step, the visitor must have completed the preceding steps in order within a single session. A visitor who adds an item to the cart or completes a transaction without an observed preceding step in that session is not counted as having completed the full ordered funnel.
+Each visitor is counted at most once per stage across the observation window. A visitor reaches a stage if the required sequence occurs in at least one session. The funnel does not require the same item ID across stages. Events with equal timestamps do not establish a strictly ordered transition. The funnel measures visitors, not sessions, orders, or revenue.
 
-- **Step conversion:** unique visitors reaching the next step divided by unique visitors reaching the current step.
-- **Step drop-off:** 1 minus the step conversion rate.
-- **Overall conversion:** unique visitors completing the transaction step divided by unique visitors reaching the view step.
+| Metric | Definition |
+|---|---|
+| View-to-Cart Conversion Rate | Visitors reaching cart / Visitors reaching view |
+| Cart-to-Purchase Conversion Rate | Visitors reaching transaction / Visitors reaching cart |
+| View-to-Purchase Conversion Rate | Visitors reaching transaction / Visitors reaching view |
+| Step Drop-off Rate | 1 - corresponding step conversion rate |
 
-Transaction IDs can appear on multiple event rows, potentially because an order contains multiple items. Repeated transaction IDs will not be treated as duplicate events without further validation. The funnel counts visitors, not orders or revenue.
+Multiply ratios by 100 to express them as percentages.
 
-## Cohorts and weekly retention
+## User Segmentation
 
-- **Cohort:** visitors grouped by the calendar week of their first observed event. Weeks start on Monday and use UTC.
-- **Cohort week (week 0):** the calendar week in which the visitor's first observed event occurs.
-- **Retention week 1, 2, etc.:** each subsequent calendar week after the cohort week.
-- **Returned / retained visitor:** a cohort visitor with at least one `view`, `addtocart`, or `transaction` event during the retention week.
-- **Weekly retention rate:** distinct retained visitors in a cohort and retention week divided by the number of visitors in that cohort.
+Visitors are classified into four mutually exclusive segments based on event presence in their first observed session. The conditions are evaluated in the following order:
 
-A secondary, higher-intent retention measure will count a visitor as returned only if they have at least one `addtocart` or `transaction` event in the retention week.
+| Priority | Dashboard Segment | Source Value | Definition |
+|---:|---|---|---|
+| 1 | No view in first session | `no_view_first_session` | No view event, regardless of cart or transaction events |
+| 2 | Purchased in first session | `transaction` | At least one view and one transaction |
+| 3 | Added to cart, no purchase | `cart_no_transaction` | At least one view and one cart event, but no transaction |
+| 4 | Viewed only | `view_only` | At least one view, with no cart or transaction events |
 
-Cohort cells without a complete observation period will be marked incomplete and excluded from comparisons that require that period. The final cohort week is incomplete because the dataset ends partway through that calendar week.
+Unlike the conversion funnel, segmentation does not require events to occur in a particular order. A segment describes observed first-session behavior, not a causal effect on retention.
 
-## User segments
+## Weekly Cohort Retention
 
-Visitors will be grouped by the furthest funnel step completed in their first observed session:
+- **Cohort:** visitors grouped by the calendar week of their first observed event. Weeks start on Monday in UTC.
+- **Week 0:** the cohort formation week.
+- **Retention week N:** the Nth calendar week after cohort formation, rather than an individual rolling seven-day window.
+- **Cohort size:** the number of distinct visitors in a cohort and first-session segment.
+- **Retained visitors:** distinct cohort visitors with at least one recorded event in the corresponding retention week.
 
-- **View only:** viewed an item, with no subsequent cart or transaction event in that session.
-- **Cart, no transaction:** added an item to the cart, but did not complete a transaction in that session.
-- **Transaction:** completed a transaction in that session, whether or not all preceding funnel events were observed.
+**Retention Rate = Retained Visitors / Cohort Size**
 
-Visitors whose first observed session contains no `view` event will be kept outside these three funnel-based segments and reported separately if present. Retention will be compared across segments using the same weekly retention definition above.
+Periods without recorded returning visitors have zero retained visitors. The SQL marks a period as complete when its Sunday is on or before the last observed event date. Both retention visualizations exclude week 0 and periods marked incomplete.
 
-These segments describe observed behavior. Differences in retention are associations and do not show that a behavior caused a visitor to return.
+### Weighted Retention
 
-## Interpretation notes
+When combining eligible cohorts or segments at a given relative week, the dashboard calculates:
 
-- The 30-minute session boundary is a convention, not a source-provided fact. Its impact can be checked later with an alternative gap if needed.
-- The first observed event is limited by the dataset's start date. Cohorts should be called **first-observed cohorts**, not registration cohorts.
-- The data do not support comparisons by acquisition channel, device, or registered-user status.
-- Results describe association, not causal impact.
+**Weighted Retention = SUM(Retained Visitors) / SUM(Cohort Size)**
+
+This weights individual retention rates by cohort-segment size instead of averaging percentages. The denominator includes the eligible cohorts represented in the selected relative week. The Tableau result is displayed as a percentage.
+
+The cohort heatmap can be filtered by first-session segment. Its color scale adjusts to the selected data. The retention trend chart compares all segments and is not affected by the heatmap segment filter.
+
+## Interpretation Notes
+
+- The 30-minute inactivity threshold is an analytical convention, not a source-provided session definition.
+- Funnel conversion and drop-off describe observed same-session event sequences aggregated at visitor level, not all possible cross-session purchase journeys.
+- The dataset may omit activity before the observation window. The first calendar week may be partially observed, and a final observed Sunday does not establish full-day coverage.
+- Later retention weeks may include fewer eligible cohorts. Changes in cohort composition and sample size can affect comparisons over time.
+- Retention measures activity in each individual calendar week, not cumulative or continuous retention.
+- Differences between segments are observational and do not establish causality.
